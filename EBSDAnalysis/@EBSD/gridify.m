@@ -39,11 +39,18 @@ end
 
 function [ebsdGrid,newId] = squarify(ebsd,varargin)
 
+if nargin==2 %Vivian Dec 2019
+    %assign the step size explicitly, intead of calculating from ebsd.unitCell
+    dx = varargin{1};
+    dy = varargin{1};%square grid
+elseif nargin==1  %original code
+    dx = max(ebsd.unitCell(:,1))-min(ebsd.unitCell(:,1));
+    dy = max(ebsd.unitCell(:,2))-min(ebsd.unitCell(:,2));
+end
+
 % generate regular grid
 prop = ebsd.prop;
 ext = ebsd.extend;
-dx = max(ebsd.unitCell(:,1))-min(ebsd.unitCell(:,1));
-dy = max(ebsd.unitCell(:,2))-min(ebsd.unitCell(:,2));
 [prop.x,prop.y] = meshgrid(linspace(ext(1),ext(2),1+round((ext(2)-ext(1))/dx)),...
   linspace(ext(3),ext(4),1+round((ext(4)-ext(3))/dy))); % ygrid runs first
 sGrid = size(prop.x);
@@ -72,6 +79,39 @@ for fn = fieldnames(ebsd.prop).'
     prop.(char(fn)) = prop.(char(fn)).nan(sGrid);
   end
   prop.(char(fn))(newId) = ebsd.prop.(char(fn));
+end
+
+if nargin==2 %remove unfilled pixel seams in ebsdGrid output
+    %this is more likely to be a problem in datasets with a step size mismatch 
+    %but seam removal is not always necessary or helpful!
+    %how to switch this off?
+    %if this is used, newId output is no longer meaningful as each ebsd point
+    %is assigned to potentially more than one ebsdGrid point
+    
+    %assign every previously unassigned sGrid point
+    %its closest ebsd datapoint
+    asg = nan(sGrid);
+    asg(newId) = ebsd.id;
+    [unasgR,unasgC] = find(isnan(asg)); %these are the missing points not assigned by newId
+    yOld = 1 + (ebsd.prop.y - ext(3))/dy; %original list of ebsd points (pixel position)
+    xOld = 1 + (ebsd.prop.x - ext(1))/dx;
+    ix = zeros(size(unasgR));
+    
+    for n=1:length(unasgR)
+        %to get the correct element, find  min least squares distance on
+        %row/column differences
+        % min((yOld - unasgR(n)).^2)would give the nearest row
+        % min((xOld - unasgC(n)).^2) would give the nearest column
+        % minimise sum of squares to both
+        [~,ix(n)] = min(((yOld - unasgR(n)).^2)+((xOld - unasgC(n)).^2));
+        
+        phaseId(unasgR(n),unasgC(n)) = ebsd.phaseId(ix(n));
+        a(unasgR(n),unasgC(n)) = ebsd.rotations.a(ix(n));
+        b(unasgR(n),unasgC(n)) = ebsd.rotations.b(ix(n));
+        c(unasgR(n),unasgC(n)) = ebsd.rotations.c(ix(n));
+        d(unasgR(n),unasgC(n)) = ebsd.rotations.d(ix(n));
+        
+    end
 end
 
 ebsdGrid = EBSDsquare(rotation(quaternion(a,b,c,d)),phaseId(:),...
@@ -116,9 +156,9 @@ else
   
   nCols = round((ext(2)-ext(1))/ (3/2*dHex));
   nRows = ceil((ext(4)-ext(3)) / (sqrt(3)*dHex)-0.25);
-   
-end
   
+end
+
 % set up indices - columns run first
 [col,row] = meshgrid(0:nCols,0:nRows);
 
