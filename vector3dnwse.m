@@ -55,9 +55,9 @@ if ~isempty(dirY)
 else
     try
         if vZ == 1 % Z points out, so X < Y
-            vY = checkmod(mod(vX+1,4));
+            vY = checkmod(mod(vX+1,4),4);
         elseif vZ == 2 %otherwise Z points in so X > Y
-            vY = checkmod(mod(vX-1,4));
+            vY = checkmod(mod(vX-1,4),4);
         end
     catch
         %either the coordinates are badly defined or something went wrong
@@ -65,29 +65,44 @@ else
     end
 end
 
-vXminus = checkmod(mod(vX+2,4));
-vYminus = checkmod(mod(vY+2,4));
+vXminus = checkmod(mod(vX+2,4),4);
+vYminus = checkmod(mod(vY+2,4),4);
+vZminus = checkmod(mod(vZ+1,2),2);
 
 %% 2. output a vector3d(+-XY) according to the input map direction (NWSE)
 vList = [vX; vXminus; vY; vYminus];
-vPos = find(vList==NWSE(nwseIn));
+vListZ = [vZ;vZminus];
 
-switch vPos
-    case 1
-        vecOut = vector3d.X;
-    case 2
-        vecOut = -vector3d.X;
-    case 3
-        vecOut = vector3d.Y;
-    case 4
-        vecOut = -vector3d.Y;
+try
+    vPos = find(vList==NWSE(nwseIn));
+    switch vPos
+        case 1
+            vecOut = vector3d.X;
+        case 2
+            vecOut = -vector3d.X;
+        case 3
+            vecOut = vector3d.Y;
+        case 4
+            vecOut = -vector3d.Y;
+    end
+catch % ok it might be outofplane or intoplane instead
+    vPos = find(vListZ==UpDown(nwseIn));
+    switch vPos
+        case 1
+            vecOut = vector3d.Z;
+        case 2
+            vecOut = -vector3d.Z;
+    end
+    
 end
 
 
-    function [vOut] = checkmod(vIn)
-    %mod(0,4) and mod(4,4) both output zero but we actually want 4
+
+
+    function [vOut] = checkmod(vIn,modval)
+        %mod(0,4) and mod(4,4) both output zero but we actually want 4
         if vIn==0
-            vOut=4;
+            vOut=modval;
         else
             vOut=vIn;
         end

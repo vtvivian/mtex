@@ -49,6 +49,7 @@ grains.boundary = subSet(grains.boundary,indBd);
 grains.innerBoundary = subSet(grains.innerBoundary,indinnerBd);
 
 % if we have only one grain - sort boundary segments
+
 if length(grains) == 1
   FNew = [grains.poly{1}(1:end-1).',grains.poly{1}(2:end).'];
   
@@ -61,13 +62,13 @@ if length(grains) == 1
 
   % sort minimum entry first
   FNew = sort(FNew,2);
-    
+try %temporary fix to ignore qhull bug    
   % sort such the order of F follows the boundary
   [~,ind1] = sortrows(grains.boundary.F);
   [~,ind2] = sortrows(FNew);
   inverseorder(ind2) = ind1;
   
   grains.boundary = grains.boundary(inverseorder);
-  
+end
   
 end
