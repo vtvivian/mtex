@@ -1,4 +1,4 @@
-function [v,l,sym] = symmetrise(v,S,varargin)
+function [v,l,sym] = symmetrise(v,varargin)
 % symmetrcially equivalent directions and its multiple
 %
 % Syntax
@@ -44,6 +44,14 @@ function [v,l,sym] = symmetrise(v,S,varargin)
 % m = Miller({1,0,0},{0,0,1},cs)
 % symmetrise(m)
 
+if nargin > 1 && isa(varargin{1},'symmetry')
+  S = varargin{1};
+  varargin(1) = [];
+else
+  S = specimenSymmetry;
+end
+
+
 % symmetrisation includes antipodal symmetry?
 antiSym = check_option(varargin,'antipodal') || v.antipodal || S.isLaue;
 
@@ -77,7 +85,8 @@ end
 v = S.rot * v;
 
 % consider antipodal symmetry
-if antiSym && ~S.isLaue, v = [v;-v]; end
+%if antiSym && ~S.isLaue, v = [v;-v]; end
+if antiSym && ~S.isLaue, v = reshape([1;-1] * reshape(v,1,[]),2*S.numSym,[]); end
 
 % finally ensure unqiue vectors if required
 if check_option(varargin,'unique')
@@ -86,7 +95,7 @@ if check_option(varargin,'unique')
   idSym = cell(size(v,2),1);
   dim1 = size(v,1);
   for j = 1:size(v,2)
-    [vSym{j},idSym{j}] = unique(v.subSet(((1:dim1) + (j-1)*dim1).'),'noSymmetry',apUnique);
+    [vSym{j},idSym{j}] = unique(v.subSet(((1:dim1) + (j-1)*dim1).'),'noSymmetry',apUnique,'stable');
   end
 
   l  = cellfun(@length, vSym);
@@ -102,4 +111,4 @@ end
 % Miller/multiplicity  ->
 % Miller/text          -> noAntipodal
 % fibre/symmetrise     -> 
-% unimodalComponent/calcPDF -> noAntipodal
+% SO3FunRBF/calcPDF    -> noAntipodal

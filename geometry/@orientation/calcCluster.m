@@ -21,7 +21,7 @@ function [c,center] = calcCluster(ori,varargin)
 %   cs = crystalSymmetry('432');
 %   center = orientation.rand(5,cs); 
 %   odf = unimodalODF(center,'halfwidth',5*degree)
-%   ori = odf.calcOrientations(1500);
+%   ori = odf.discreteSample(1500);
 %
 %   % find the clusters and its centers
 %   [cId,centerRec] = calcCluster(ori);
@@ -68,10 +68,14 @@ switch method
       % remove points to far from the center
       ori_c = ori.subSet(c==i);
       omega = angle(ori_c,center.subSet(i));
-      c(c==i) = i * (omega < 1.5*quantile(omega,0.9));
+      ind = (omega < 1.5*quantile(omega,0.9));
+      if ~all(ind)
+        c(c==i) = i * (omega < 1.5*quantile(omega,0.9));
+        ori_c = ori.subSet(ind);
+      end
       
       % recompute center
-      odf = unimodalODF(ori_c,weights(c==i),'halfwidth',2.5*degree,varargin{:});
+      odf = unimodalODF(ori_c,'halfwidth',2.5*degree,varargin{:},'weights',weights(c==i));
       center = subsasgn(center,i,odf.steepestDescent(center.subSet(i)));
       
     end
@@ -89,7 +93,7 @@ function test
 cs = crystalSymmetry('432');
 center = orientation.rand(5,cs);
 odf = unimodalODF(center,'halfwidth',5*degree);
-ori = odf.calcOrientations(1500);
+ori = odf.discreteSample(1500);
 
 % find the clusters and its centers
 tic; 
