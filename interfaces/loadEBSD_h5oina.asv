@@ -147,13 +147,12 @@ for k = 1 :length(EBSD_index) % TODO: find a good way to write out multiple data
             Imageheader.(sane_name) = content;
         end
 
-        % try to gridify the images (read axis ij)
+        % try to gridify the images
         try
             for est=1:length(allImage)
                 for thing = 1:length(allImage{est})
                     sane_name = regexprep(allImage{est}(thing).Name,' |-|,|:|%|~|#','_');
-                    %assume image is read across rows first
-                    Imagedata.(sane_name)=permute(reshape(Imagedata.(sane_name)(:),[Imageheader.X_Cells Imageheader.Y_Cells]),[2 1]);
+                    Imagedata.(sane_name)=permute(reshape(Imagedata.(sane_name)(:),[Imageheader.Y_Cells Imageheader.X_Cells]);
                 end
             end
         catch
