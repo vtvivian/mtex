@@ -1,11 +1,10 @@
 function [ebsdGrid,newId] = squarify(ebsd,varargin)
 
 uc = get_option(varargin,'unitCell',ebsd.unitCell);
-ext = get_option(varargin,'extend',ebsd.extend);
+ext = get_option(varargin,'extent',ebsd.extent);
 
 % generate regular grid
 prop = ebsd.prop;
-% ext = ebsd.extend;
 dx = max(uc(:,1))-min(uc(:,1));
 dy = max(uc(:,2))-min(uc(:,2));
 

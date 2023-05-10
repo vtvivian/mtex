@@ -104,7 +104,7 @@ for k = 1 :length(EBSD_index) % TODO: find a good way to write out multiple data
         %read all datsets
         for est=1:length(allEDS)
             for thing = 1:length(allEDS{est})
-                sane_name = regexprep(allEDS{est}(thing).Name,' |-|,|:|%|~|#','_');
+                sane_name = regexprep(allEDS{est}(thing).Name,{' |-|,|:|%|~|#' char(945) char(946)},{'_' 'a' 'b'});
                 EDSdata.(sane_name)=double(h5read(fname,[EDSPATH{est} '/' allEDS{est}(thing).Name]));
             end
         end
@@ -201,7 +201,10 @@ for k = 1 :length(EBSD_index) % TODO: find a good way to write out multiple data
         %             'X||a*','Y||b', 'Z||C');
     end
     
-    
+    if check_option(varargin,'CS');
+        CS = get_option(varargin,'CS');
+    end
+
     % write out first EBSD dataset
     % EBSDheader.Specimen_Orientation_Euler: this should be the convention to map
     % CS1 (sample surface) into CS0 (sample primary),
@@ -252,6 +255,11 @@ for k = 1 :length(EBSD_index) % TODO: find a good way to write out multiple data
     
 end
 
+warning(['Please make sure that you correct for the very probable ' ...
+         'inconsitencies between coordinate systems. '  ...
+         'Example:' newline ...
+         'rot = rotation.byAxisAngle(yvector,180*degree)' newline ...
+         'ebsd = rotate(ebsd,rot,''keepXY'')' newline]);
 
 
 end

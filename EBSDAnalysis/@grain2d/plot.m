@@ -183,7 +183,7 @@ if check_option(varargin,'DisplayName')
   legend('-DynamicLegend','location','NorthEast');
 end
 
-% keep track of the extend of the graphics
+% keep track of the extent of the graphics
 % this is needed for the zoom: TODO maybe this can be done better
 if isNew
   
@@ -207,7 +207,9 @@ datacursormode off
 
 % define a hand written selector
 set(gcf,'WindowButtonDownFcn',{@spatialSelection});
-setappdata(mP.ax,'grains',[grains;getappdata(mP.ax,'grains')]);
+try
+  setappdata(mP.ax,'grains',[grains;getappdata(mP.ax,'grains')]);
+end
 
 if nargout == 0, clear h;end
 
