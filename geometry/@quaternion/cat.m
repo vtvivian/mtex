@@ -15,6 +15,7 @@ function q = cat(dim,varargin)
 % quaternion/horzcat, quaternion/vertcat
 
 q = varargin{1};
+dim=2;
 
 qa = cell(size(varargin)); qb = qa; qc = qa; qd = qa;
 for i = 1:length(varargin)
