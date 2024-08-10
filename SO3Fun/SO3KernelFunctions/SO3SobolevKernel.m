@@ -19,9 +19,8 @@ classdef SO3SobolevKernel < SO3Kernel
     
     function psi = SO3SobolevKernel(s,varargin)
       
-      if nargin >1
-        psi.s = s;
-      end
+      if nargin == 0, return;end
+      psi.s = s;
       
       % extract bandwidth
       L = get_option(varargin,'bandwidth',1000);

@@ -41,35 +41,35 @@ w = repelem(SO3F.weights./l,l);
 
 g = vector3d.zeros(size(ori));
 
-tS = SO3TangentSpace.extract(varargin{:});
-
-if tS.isRight
+if check_option(varargin,'right')
   for i = 1:length(h)
     g = g + w(i) * SO3F.psi.grad(dot(ori*h(i),r(i),'noSymmetry'),'polynomial') .* ...
         cross(h(i),inv(ori) * r(i));
   end
+  g = SO3TangentVector(g,'right');
 else
   for i = 1:length(h)
     g = g + w(i) * SO3F.psi.grad(dot(h(i),inv(ori) * r(i),'noSymmetry'),'polynomial') .* ...
         cross(ori*h(i),r(i));
   end
+  g = SO3TangentVector(g,'left');
 end
 
-g = SO3TangentVector(reshape(g,s),tS);
+g = reshape(g,s);
 
 end
 
-function test %#ok<DEFNU>
+function test
 
 cs = crystalSymmetry('1');
 odf = fibreODF(Miller(0,0,1,cs),vector3d.Z);
-%omega = linspace(-20,20)*degree;
+omega = linspace(-20,20)*degree;
 omega = 15 *degree;
-ref = orientation.byAxisAngle(vector3d(1,0,10),omega,cs) %#ok<NOPRT>
+ref = orientation.byAxisAngle(vector3d(1,0,10),omega,cs)
 
 
-g1 = odf.grad(ref,'left')  %#ok<NOPRT>
-g2 = odf.grad(ref,'check','delta',0.05*degree,'left')  %#ok<NOPRT>
+g1 = odf.grad(ref)
+g2 = odf.grad(ref,'check','delta',0.05*degree)
   
 plot(omega./degree,[g1.x,g2.x])
 
@@ -86,17 +86,17 @@ plot(omega2./degree,[odf.eval(ori1(:)),odf.eval(ori2(:)),odf.eval(ori3(:)),odf.e
 
 end
 
-function test2 %#ok<DEFNU>
+function test2
 
   cs = crystalSymmetry('321');
   odf = fibreODF(Miller(1,2,3,cs),vector3d(-1,3,2));
   
-  ref = orientation.rand(1000,cs)  %#ok<NOPRT>
+  ref = orientation.rand(1000,cs)
   
-  g1 = odf.grad(ref)  %#ok<NOPRT>
-  g2 = odf.grad(ref,'check','delta',0.05*degree)  %#ok<NOPRT>
+  g1 = odf.grad(ref)
+  g2 = odf.grad(ref,'check','delta',0.05*degree)
   
-  histogram(norm(g1-g2)./degree)
+  hist(norm(g1-g2)./degree)
   
   ref = orientation.id(cs) * cs(5);
   

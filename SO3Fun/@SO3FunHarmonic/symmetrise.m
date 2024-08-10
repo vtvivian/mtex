@@ -1,27 +1,20 @@
-function [SO3F,psi] = symmetrise(SO3F,varargin)
-% Symmetrise the harmonic coefficients of an SO3FunHarmonic w.r.t. its 
-% symmetries or a center orientation.
+function SO3F = symmetrise(SO3F,varargin)
+% Symmetrise the harmonic coefficients of an SO3FunHarmonic w.r.t. its symmetries.
 % 
 % Therefore we compute the harmonic coefficients of the SO3FunHarmonic 
 % by using symmetry properties.
 %
 % Syntax
-%   SO3Fs = symmetrise(SO3F)
-%   SO3Fs = symmetrise(SO3F,'CS',cs,'SS',ss)
-%   [SO3Fs,psi] = symmetrise(SO3F,ori)
+%   SO3F = symmetrise(SO3F)
 %
 % Input
 %  SO3F - @SO3FunHarmonic
-%  cs,ss - @crystalSymmetry, @specimenSymmetry
-%  ori - @orientation (center)
-%
 %
 % Output
-%  SO3Fs - @SO3FunHarmonic
-%  psi - @SO3Kernel
+%  SO3F - @SO3FunHarmonic
 %
 
-if SO3F.bandwidth==0 || check_option(varargin,'skipSymmetrise')
+if SO3F.bandwidth==0
   return
 end
 
@@ -30,50 +23,8 @@ SO3F = reshape(SO3F,prod(s));
 
 L = SO3F.bandwidth;
 
-% symmetrise with respect to an axis
-if nargin>1 && isa(varargin{1},'rotation')
-  
-  % Forget about the symmetries
-  SO3F.CS = crystalSymmetry;
-  SO3F.SS = specimenSymmetry;
-  center = rotation(varargin{1});
-
-  % rotate SO3F such that center -> rotation.id
-  if center ~= rotation.id
-    SO3F = rotate(SO3F,inv(center));
-  end
-
-  % start with a zero function
-  fhat = SO3F.fhat;
-  SO3F.fhat = 0; SO3F.bandwidth = L;
-  
-  % set all Fourier coefficients f_hat(n,k,l) = 0 for k ~= l and compute the
-  % mean in each Fourier matrix
-  A = zeros(L+1,prod(s));
-  for n = 0:L
-    ind = deg2dim(n)+1:2*n+2:deg2dim(n+1);
-    A(n+1,:) = mean(fhat(ind,:));
-    SO3F.fhat(ind,:) = A(n+1,:);
-  end
-  if prod(s)==1
-    psi = SO3Kernel(real(A) .* sqrt(2*(0:L)'+1));
-  else
-    for i=1:prod(s)
-      psi{i} = SO3Kernel(real(A(:,i)) .* sqrt(2*(0:L)'+1));
-    end
-  end
-
-  % rotate SO3F back
-  if center ~= rotation.id
-    SO3F = rotate(SO3F,center);
-  end
-
-  return
-end
-
-
-cs = get_option(varargin,'CS',SO3F.CS);
-ss = get_option(varargin,'SS',SO3F.SS);
+cs = get_option(varargin,'CS',SO3F.CS.properGroup);
+ss = get_option(varargin,'SS',SO3F.SS.properGroup);
  
 if numSym(cs) ~= 1 % symmetrize crystal symmetry
   SO3F.fhat = convSO3(SO3F.fhat,cs.WignerD(L));

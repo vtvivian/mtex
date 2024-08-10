@@ -51,14 +51,30 @@ H = [2,4,2]*rot.bandwidth + [2,0,2];
 % 2) Transform harmonic/Wigner coefficients to Fourier coefficients
 % create ghat -> k x j x l
 % flags: 2^0 -> use L_2-normalized Wigner-D functions
-%        2^2 -> fhat are the Fourier coefficients of a real valued function
+%        2^2 -> fhat are the fourier coefficients of a real valued function
 %        2^4 -> use right and left symmetry
 if isReal
   flags = 2^0+2^2+2^4;
+  sym = [min(SO3F.SRight.multiplicityPerpZ,2),SO3F.SRight.multiplicityZ,...
+    min(SO3F.SLeft.multiplicityPerpZ,2),SO3F.SLeft.multiplicityZ];
+  ghat = representationbased_coefficient_transform(N,SO3F.fhat,flags,sym);
+  ghat = symmetriseFourierCoefficients(ghat,flags,SO3F.SRight,SO3F.SLeft,sym);
 else
   flags = 2^0+2^4;
+  sym = [min(SO3F.SRight.multiplicityPerpZ,2),SO3F.SRight.multiplicityZ,...
+    min(SO3F.SLeft.multiplicityPerpZ,2),SO3F.SLeft.multiplicityZ];
+  ghat = representationbased_coefficient_transform(N,SO3F.fhat,flags,sym);
+  ghat = symmetriseFourierCoefficients(ghat,flags,SO3F.SRight,SO3F.SLeft,sym);
 end
-ghat = wignerTrafo(SO3F,flags,'bandwidth',N);
+
+
+% 3) correct ghat by i^(-k+l)
+if isReal
+  z = (1i).^((-N:N)' - reshape(0:N,1,1,[]));
+else
+  z = (1i).^((-N:N)' - reshape(-N:N,1,1,[]));
+end
+ghat = ghat .* z;
 
 
 % 4) use rotational symmetries around Z-axis to speed up 
@@ -86,10 +102,8 @@ if any(H<sz)
   dim = ceil(sz./H);
   B = zeros(dim.*H);
   B(1:size(ghat,1),1:2*N+1,1:size(ghat,3)) = ghat;
-  B = reshape(B,H(1),dim(1),H(2),dim(2),H(3),dim(3));
   % Note that H(1) and H(2) should be biger than 1 to avoid errors by squeezing
-  ghat = squeeze(sum(B,[2,4,6]));
-  clear B;
+  ghat = squeeze(sum(reshape(B,H(1),dim(1),H(2),dim(2),H(3),dim(3)),[2,4,6]));
 end
 
 

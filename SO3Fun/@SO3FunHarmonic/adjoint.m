@@ -113,7 +113,7 @@ else
 end
 
 % initialize nfft plan
-if isempty(plan) && ~(isa(rot,'quadratureSO3Grid') && strcmp(rot.scheme,'ClenshawCurtis')) && ~check_option(varargin,'directComputation')
+if isempty(plan) && ~(isa(rot,'quadratureSO3Grid') && strcmp(rot.scheme,'ClenshawCurtis'))
 
   %plan = nfftmex('init_3d',2*N+2,2*N+2,2*N+2,M);
   NN = 2*N+2;
@@ -149,36 +149,24 @@ if isa(rot,'quadratureSO3Grid') && strcmp(rot.scheme,'ClenshawCurtis')
   ghat = ifftshift(ghat);
   ghat = 16*N*(N+1)^2 * ghat(2:end,N+1:3*N+1,2:end);
 
-elseif check_option(varargin,'directComputation')
-  % use symmetries
-  
-  % Do adjoint nsoft directly by evaluating the sum
-  nodes = Euler(rot(:),'nfft').';
-  ghat = zeros(2*N+1,2*N+1,2*N+1);
-  for m = 1:length(rot)
-    ghat = ghat + values(m)*exp(1i * ( ...
-      (-N:N)*nodes(2,m) ...
-      + (-N:N)'*nodes(3,m) ...
-      + permute(-N:N,[1,3,2])*nodes(1,m)) );
-  end
-
 else
 
   % adjoint nfft
   nfftmex('set_f', plan, W(:) .* values(:));
   nfftmex('adjoint', plan);
-  % adjoint Fourier transform
+  % adjoint fourier transform
   ghat = nfftmex('get_f_hat', plan);
   ghat = reshape(ghat,2*N+2,2*N+2,2*N+2);
   ghat = ghat(2:end,2:end,2:end);
 
 end
 
-% --------------------- (3) adjoint Wigner transform ----------------------
+% --------------------- (3) shift rotational grid -------------------------
 
-% shift rotational grid
 z = (1i).^(reshape(-N:N,1,1,[]) - (-N:N).');
 ghat = z .* ghat;
+
+% --------- (4) adjoint representationbased coefficient transform ---------
 
 % set flags and symmetry axis
 flags = 2^0+2^4;  % use L2-normalized Wigner-D functions and symmetry properties
@@ -192,11 +180,9 @@ sym = [min(SRight.multiplicityPerpZ,2),SRight.multiplicityZ,...
 if ~isa(rot,'quadratureSO3Grid') || strcmp(rot.scheme,'GaussLegendre')
   sym([1,3]) = 1;
 end
-% use adjoint Wigner transform
-fhat = wignerTrafoAdjointmex(N,ghat,flags,sym);
+% use adjoint representation based coefficient transform
+fhat = adjoint_representationbased_coefficient_transform(N,ghat,flags,sym);
 fhat = symmetriseWignerCoefficients(fhat,flags,SRight,SLeft,sym);
-
-
 
 % kill plan
 if check_option(varargin,'keepPlan')
@@ -205,9 +191,9 @@ elseif ~isempty(plan)
   nfftmex('finalize', plan);
 end
 
-% ------------------- (4) Construct SO3FunHarmonic ------------------------
+% ------------------- (5) Construct SO3FunHarmonic ------------------------
 
-SO3F = SO3FunHarmonic(fhat,SRight,SLeft,varargin{:});
+SO3F = SO3FunHarmonic(fhat,SRight,SLeft);
 
 % if antipodal consider only even coefficients
 SO3F.antipodal = check_option(varargin,'antipodal');

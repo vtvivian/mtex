@@ -4,7 +4,7 @@ function f = eval(SO3F,rot,varargin)
 % Description
 % Evaluates the orientation dependent function $f$ on a given set of points using a
 % representation based coefficient transform, that transforms 
-% a series of Wigner-D functions into a trivariate Fourier series and using
+% a series of Wigner-D functions into a trivariate fourier series and using
 % NFFT at the end.
 %
 % Syntax
@@ -53,7 +53,7 @@ M = length(rot);
 
 if SO3F.bandwidth == 0
   f = ones(size(rot)) .* SO3F.fhat;
-  if isscalar(SO3F), f = reshape(f,s); end
+  if numel(SO3F) == 1, f = reshape(f,s); end
   return;
 end
 
@@ -62,6 +62,8 @@ N = min(SO3F.bandwidth,get_option(varargin,'bandwidth',inf));
 
 % alpha, beta, gamma
 abg = Euler(rot,'nfft').'./(2*pi);
+abg = (abg + [0.25;0;-0.25]);
+abg = mod(abg,1);
 
 % create plan
 if check_option(varargin,'keepPlan')
@@ -107,23 +109,53 @@ if check_option(varargin,'createPlan')
   return
 end
 
-% If SO3F is real valued we have the symmetry properties (*) and (**) for
-% the Fourier coefficients. We will use this to speed up computation.
-if SO3F.isReal
-  flags = 2^0+2^1+2^2+2^4;
-else
-  flags = 2^0+2^1+2^4;
-end
-
 f = zeros([length(rot) size(SO3F)]);
 for k = 1:length(SO3F)
 
-  ghat = wignerTrafo(SO3F.subSet(k),flags,'bandwidth',N);
+  % If SO3F is real valued we have the symmetry properties (*) and (**) for 
+  % the Fourier coefficients. We will use this to speed up computation.
+  if SO3F.isReal
+
+    % ind = mod(N+1,2);
+    % create ghat -> k x j x l
+    %   k = -N+1:N
+    %   j = -N+1:N      -> use ghat(k,-j,l) = (-1)^(k+l)*ghat(k,j,l)    (*)
+    %   l =    0:N+ind  -> use ghat(-k,-j,-l) = conj(ghat(k,j,l))      (**)
+    % we need to make the size (2N+2)^3 as the index set of the NFFT is -(N+1) ... N 
+    % Therfore we use ind in 2nd dimension to get even number of fourier coefficients
+    % The additional indices produce 0-columns in front of ghat
+    % flags: 2^0 -> use L_2-normalized Wigner-D functions
+    %        2^1 -> make size of result even
+    %        2^2 -> fhat are the fourier coefficients of a real valued function
+    %        2^4 -> use right and left symmetry
+    flags = 2^0+2^1+2^2+2^4;
+    sym = [min(SO3F.SRight.multiplicityPerpZ,2),SO3F.SRight.multiplicityZ,...
+         min(SO3F.SLeft.multiplicityPerpZ,2),SO3F.SLeft.multiplicityZ];
+    ghat = representationbased_coefficient_transform(N,SO3F.fhat(:,k),flags,sym);
+    ghat = symmetriseFourierCoefficients(ghat,flags,SO3F.SRight,SO3F.SLeft,sym);
+%     ghat = representationbased_coefficient_transform_old(N,SO3F.fhat(:,k),2^0+2^1+2^2);
+
+  else
+
+    % create ghat -> k x j x l
+    % we need to make the size (2N+2)^3 as the index set of the NFFT is -(N+1) ... N
+    % we can use (*) again to speed up
+    % flags: 2^0 -> use L_2-normalized Wigner-D functions
+    %        2^1 -> make size of result even
+    %        2^4 -> use right and left symmetry
+    flags = 2^0+2^1+2^4;
+    sym = [min(SO3F.SRight.multiplicityPerpZ,2),SO3F.SRight.multiplicityZ,...
+         min(SO3F.SLeft.multiplicityPerpZ,2),SO3F.SLeft.multiplicityZ];
+    ghat = representationbased_coefficient_transform(N,SO3F.fhat(:,k),flags,sym);
+    ghat = symmetriseFourierCoefficients(ghat,flags,SO3F.SRight,SO3F.SLeft,sym);
+%     ghat = representationbased_coefficient_transform_old(N,SO3F.fhat(:,k),2^1+2^2);
+
+  end
 
   % set Fourier coefficients
   nfftmex('set_f_hat',plan,ghat(:));
 
-  % fast Fourier transform
+  % fast fourier transform
   nfftmex('trafo',plan);
 
   % get function values from plan
@@ -143,6 +175,6 @@ else
   nfftmex('finalize',plan);
 end
 
-if isscalar(SO3F), f = reshape(f,s); end
+if numel(SO3F) == 1, f = reshape(f,s); end
 
 end

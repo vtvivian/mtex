@@ -3,12 +3,13 @@ function f = eval(SO3VF,ori,varargin)
 % 
 % Syntax
 %   f = eval(SO3VF,rot)         % left tangent vector
+%   f = eval(SO3VF,rot,'right') % right tangent vector
 %
 % Input
 %   rot - @rotation
 %
 % Output
-%   f - @SO3TangentVector
+%   f - @vector3d
 %
 % See also
 %

@@ -7,7 +7,7 @@ function ori = discreteSample(odf,npoints,varargin)
 q = quaternion.id(npoints,1);
 
 % which component
-if isscalar(odf.weights)
+if numel(odf.weights) == 1
   icmp = ones(size(q));
 else
   icmp = discretesample(odf.weights,npoints);

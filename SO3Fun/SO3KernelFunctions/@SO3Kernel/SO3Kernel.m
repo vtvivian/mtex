@@ -62,7 +62,7 @@ classdef SO3Kernel
         xnum2str(psi.halfwidth/degree) mtexdegchar];
     end
     
-    function psi =  mpower(psi,varargin) %#ok<INUSD>
+    function psi = mpower(psi,p)
       % self convolution
       error(['Operator ''*'' is not supported for operands of type ''SO3Kernel''. Use ' ...
         'conv() instead.'])

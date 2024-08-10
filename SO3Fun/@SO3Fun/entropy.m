@@ -20,9 +20,6 @@ function H = entropy(SO3F,varargin)
 % See also
 % SO3Fun/norm SO3Fun/sum
 
-
-% TODO: nur einmal f auswerten und integrand nicht in SO3FunHarmonic umwandeln.
-
 H = mean(- SO3F.*log(SO3F));
 
 
