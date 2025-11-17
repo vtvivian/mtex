@@ -44,8 +44,8 @@ function [ebsd,interface,options] = load(fname,varargin)
 %   CS = {'notIndexed',...
 %          crystalSymmetry('m-3m','mineral','Fe'),...
 %          crystalSymmetry('m-3m','mineral','Mg')};
-%   SS = specimenSymmetry('triclinic');
-%   ebsd = EBSD.load(fname,'CS',CS,'SS',SS, 'ColumnNames', ...
+%
+%   ebsd = EBSD.load(fname,'CS',CS, 'ColumnNames', ...
 %     {'Index' 'Phase' 'x' 'y' 'Euler1' 'Euler2' 'Euler3' 'MAD' 'BC' 'BS'...
 %     'Bands' 'Error' 'ReliabilityIndex'}, 'Bunge')
 %
@@ -95,8 +95,6 @@ for k = 1:numel(fname)
 end
 
 % combine multiple inputs
-% ISSUE -- we don't always want to do this e.g. multiple maps in h5
-% file may not be related
 ebsd = [ebsd{:}];
 
 % ensure unique phases

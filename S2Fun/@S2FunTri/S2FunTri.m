@@ -4,7 +4,7 @@ classdef S2FunTri < S2Fun
   properties
     tri          % S2Triangulation
     values = []  % function values
-    s = specimenSymmetry
+    s = specimenSymmetry.default
     antipodal = false
     isReal = true
   end
@@ -30,10 +30,11 @@ classdef S2FunTri < S2Fun
       if isa(nodes,'S2Triangulation')
         sF.tri = nodes;
       else
-        if nargin==2, s = specimenSymmetry; end
+        if nargin==2, s = specimenSymmetry.default; end
         nodes = symmetrise(nodes(:)',s);
         values = repmat(values(:)',size(nodes,1),1);
         nodes.antipodal = false;
+        [nodes,values] = uniqueData(nodes,values);
         sF.tri = S2Triangulation(nodes);
       end
       
@@ -52,6 +53,19 @@ classdef S2FunTri < S2Fun
       S2F.tri.vertices = v;
       S2F.tri.update;
     end
+
+    function display(sF,varargin)
+
+      displayClass(sF,inputname(1),'moreInfo',char(sF.s,'compact'),varargin{:});
+
+      if length(sF) > 1, disp(['  size: ' size2str(sF)]); end
+
+      disp(['  vertices: ' size2str(sF.vertices)]);
+      if sF.antipodal, disp('  antipodal: true'); end
+      disp(' ');
+
+    end
+
 
   end    
 

@@ -1,5 +1,5 @@
 classdef S2AxisFieldTri < S2AxisField
-% a class represeneting a function on the sphere
+% a class representing an axes valued function on the sphere
   
   properties
     tri       % S2Triangulation
@@ -27,7 +27,10 @@ classdef S2AxisFieldTri < S2AxisField
       if isa(nodes,'S2Triangulation')
         sVF.tri = nodes;
       else
+
+        [nodes,values] = uniqueData(nodes,values);
         sVF.tri = S2Triangulation(nodes);
+        
       end
 
       sVF.values = values;
@@ -46,6 +49,19 @@ classdef S2AxisFieldTri < S2AxisField
       if ~isempty(S2F.values), S2F.values = S2F.eval(v); end
       S2F.tri.vertices = v;
       S2F.tri.update;
+    end
+
+    function display(sF,varargin)
+
+      %displayClass(sF,inputname(1),'moreInfo',char(sF.s,'compact'),varargin{:});
+      displayClass(sF,inputname(1),varargin{:});
+
+      if length(sF) > 1, disp(['  size: ' size2str(sF)]); end
+
+      disp(['  vertices: ' size2str(sF.vertices)]);
+      if sF.antipodal, disp('  antipodal: true'); end
+      disp(' ');
+
     end
     
   end

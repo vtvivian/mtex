@@ -13,14 +13,29 @@ methods
   function S2F = S2FunHandle(fun,sym)
     S2F.fun = fun;
     if nargin == 1
-      S2F.s = specimenSymmetry;
+      S2F.s = specimenSymmetry.default;
     else
       S2F.s = sym;
     end
   end
   
+  function d = size(S2F,varargin)
+
+    v = S2F.fun(xvector);
+    
+    d = size(v);
+    d = d(2:end);
+    if isscalar(d), d = [d 1]; end
+    if nargin > 1, d = d(varargin{1}); end
+
+  end
+
+
   function f = eval(S2F,v)
     f = S2F.fun(v+0.000001*xvector);
+
+    f = reshape(f,numel(v),[]);
+
   end
   
 end
