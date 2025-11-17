@@ -34,7 +34,7 @@ if abs(dot(grains.N,zvector)) ~= 1
     % update this to rotate ebsd to plane as well and run smooth1
     [grains,rot] = rotate2Plane(grains);
     [ebsd] = rotate(ebsd,rot);
-    [grains,stablefraction] = smooth1(grains,iter,ebsd,varargin);
+    [grains,stablefraction] = smooth(grains,iter,ebsd,varargin);
     grains = inv(rot) * grains;
 
     return
@@ -165,7 +165,7 @@ end
 stablefraction = numel(vDontMove)/t;
 
 % update output
-grains.allV = vector3d.byXYZ(V);
+grains.allV = vector3d.byXYZ(V,grains.how2plot);
 
 end
 

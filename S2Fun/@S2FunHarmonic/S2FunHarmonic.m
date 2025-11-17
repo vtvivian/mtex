@@ -75,7 +75,7 @@ methods
     sF = reshape(sF,numel(sF));
     sF = truncate(sF);
     normF = sum(abs(sF.fhat-sF.even.fhat).^2);
-    out = all(sqrt(normF) < 1e-5*norm(sF));
+    out = all(all(sqrt(normF) < 1e-5*norm(sF)));
   end
   
   function sF = set.antipodal(sF,value)
@@ -106,7 +106,7 @@ methods
       ind(l^2+1:(l+1)^2) = (l+1)^2:-1:l^2+1;
     end
     sF.fhat = 0.5*(sF.fhat+conj(sF.fhat(ind,:)));
-    sF=reshape(sF,sz);
+    sF = reshape(sF,sz);
   end
 
   function d = size(sF, varargin)
