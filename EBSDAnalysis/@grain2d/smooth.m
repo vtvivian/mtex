@@ -14,6 +14,7 @@ function [grains,stablefraction] = smooth(grains,iter,ebsd,varargin)
 %  stablefraction - scalar - fraction of boundary vertices that stopped
 %  moving before the last smoothing iteration
 %
+<<<<<<< HEAD
 % Options 
 %  moveTriplePoints  - do not exclude triple/quadruple points from
 %  smoothing (checked - ok with new smooth)
@@ -29,6 +30,20 @@ function [grains,stablefraction] = smooth(grains,iter,ebsd,varargin)
 % Versions
 % 2024-07-23 - Created function based on mtex/grain2d/smooth
 % 2024-07-23 - Replace for-loop with array indexing when excluding segments
+=======
+% Options
+%  moveTriplePoints  - do not exclude triple/quadruple points from smoothing
+%  moveOuterBoundary - do not exclude outer boundary from smoothing 
+%  second_order, S2  - second order smoothing
+%  rate              - default smoothing kernel  
+%  gauss             - Gaussian smoothing kernel  
+%  exp               - exponential smoothing kernel  
+%  umbrella          - umbrella smoothing kernel   
+%
+% Description 
+% Note: when grains were segmented using alphaShapes, all grains next to holes
+% have outer boundary!
+
 
 if abs(dot(grains.N,zvector)) ~= 1
     % update this to rotate ebsd to plane as well and run smooth1
@@ -112,7 +127,7 @@ for l=1:iter
         A_V = sparse(i,j,w,t,t);
     end
 
-    % take the mean over the neigbours
+    % take the mean over the neigbors
     Vt = A_V * V;
 
     m = sum(A_V,2);
