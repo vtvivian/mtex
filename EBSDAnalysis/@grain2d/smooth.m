@@ -14,23 +14,6 @@ function [grains,stablefraction] = smooth(grains,iter,ebsd,varargin)
 %  stablefraction - scalar - fraction of boundary vertices that stopped
 %  moving before the last smoothing iteration
 %
-<<<<<<< HEAD
-% Options 
-%  moveTriplePoints  - do not exclude triple/quadruple points from
-%  smoothing (checked - ok with new smooth)
-% % the options below have not been checked for compatibility with new smooth!
-%  moveOuterBoundary - do not exclude outer boundary from smoothing
-%  second_order, S2  - second order smoothing
-%  rate              - default smoothing kernel
-%  gauss             - Gaussian smoothing kernel
-%  exp               - exponential smoothing kernel
-%  umbrella          - umbrella smoothing kernel
-%
-%
-% Versions
-% 2024-07-23 - Created function based on mtex/grain2d/smooth
-% 2024-07-23 - Replace for-loop with array indexing when excluding segments
-=======
 % Options
 %  moveTriplePoints  - do not exclude triple/quadruple points from smoothing
 %  moveOuterBoundary - do not exclude outer boundary from smoothing 
@@ -68,19 +51,19 @@ t = size(A_V,1);
 numF = size(I_VF,2);
 % do not consider triple points
 if check_option(varargin,'moveTriplePoints')
-    ignore = false(size(A_V,1),1);
+  ignore = false(size(A_V,1),1);
 else
-    ignore = full(diag(A_V)) > 2;
+  ignore = full(diag(A_V)) > 2;
 end
 
 % ignore outer boundary
 if ~check_option(varargin,'moveOuterBoundary')
-    ignore(grains.boundary.F(any(grains.boundary.grainId==0,2),:)) = true;
+  ignore(grains.boundary.F(any(grains.boundary.grainId==0,2),:)) = true;
 end
 
 if check_option(varargin,{'second order','second_order','S','S2'})
-    A_V = logical(A_V + A_V*A_V);
-    A_V = A_V - diag(diag(A_V));
+  A_V = logical(A_V + A_V*A_V);
+  A_V = A_V - diag(diag(A_V));
 end
 
 weight = get_flag(varargin,{'gauss','expotential','exp','umbrella','rate'},'rate');
@@ -109,6 +92,22 @@ VperF= cellfun(@find,mat2cell(I_VF,size(I_VF,1),ones(1,size(I_VF,2))),'UniformOu
 tfIntersect=true(numF,1); % if tfIntsersect(i) == true, then allow V(i) to move
 
 for l=1:iter
+  if ~strcmpi(weight,'rate')
+    [i,j] = find(A_V);
+    d = sqrt(sum((V(i,:)-V(j,:)).^2,2)); % distance
+    switch weight
+      case 'umbrella'
+        w = 1./(d);
+        w(d==0) = 1;
+      case 'gauss'
+        w = exp(-(d./lambda).^2);
+      case {'expotential','exp'}
+        w = lambda*exp(-lambda*d);
+    end
+    
+    A_V = sparse(i,j,w,t,t);
+  end
+
 
     %%%%% from orignal code
     if ~strcmpi(weight,'rate')
