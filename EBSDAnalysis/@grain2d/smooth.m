@@ -9,6 +9,10 @@ function [grains,stablefraction] = smooth(grains,iter,ebsd,varargin)
 %  grains - @grain2d
 %  iter   - number of iterations (default: 1)
 %
+% Optional Input
+%  ebsd   - @EBSD - stop moving gb segments about to cross over to the wrong side of
+% grains.boundary.ebsdId
+%
 % Output
 %  grains - @grain2d
 %  stablefraction - scalar - fraction of boundary vertices that stopped
@@ -18,29 +22,37 @@ function [grains,stablefraction] = smooth(grains,iter,ebsd,varargin)
 %  moveTriplePoints  - do not exclude triple/quadruple points from smoothing
 %  moveOuterBoundary - do not exclude outer boundary from smoothing 
 %  second_order, S2  - second order smoothing
-%  rate              - default smoothing kernel  
-%  gauss             - Gaussian smoothing kernel  
-%  exp               - exponential smoothing kernel  
-%  umbrella          - umbrella smoothing kernel   
-%
-% Description 
-% Note: when grains were segmented using alphaShapes, all grains next to holes
-% have outer boundary!
+%  rate              - default smoothing kernel
+%  gauss             - Gaussian smoothing kernel
+%  exp               - exponential smoothing kernel
+%  umbrella          - umbrella smoothing kernel
 
+% grab optional input
+[ebsd,varargin] = getClass(varargin,'EBSD');
+if  ~isempty(ebsd)
+    keepEbsdId=true;
+
+else
+    keepEbsdId=false;
+    stablefraction = [];
+end
+
+if nargin < 2 || isempty(iter), iter = 1; end
 
 if abs(dot(grains.N,zvector)) ~= 1
-    % update this to rotate ebsd to plane as well and run smooth1
+    % update this to rotate ebsd to plane as well and run smooth
     [grains,rot] = rotate2Plane(grains);
-    [ebsd] = rotate(ebsd,rot);
-    [grains,stablefraction] = smooth(grains,iter,ebsd,varargin);
+    if keepEbsdId
+        [ebsd] = rotate(ebsd,rot);
+        [grains,stablefraction] = smooth(grains,iter,[{ebsd},varargin]);
+    else
+        grains = smooth(grains,iter,varargin);
+    end
     grains = inv(rot) * grains;
 
     return
-
 end
 
-
-if nargin < 2 || isempty(iter), iter = 1; end
 
 % compute incidence matrix vertices - faces
 I_VF = [grains.boundary.I_VF,grains.innerBoundary.I_VF];
@@ -74,6 +86,7 @@ V = grains.allV.xyz; % 1 per vertex V
 isNotZero = ~all(~isfinite(V) | V == 0,2) & ~ignore; %this is at the start, update as boundary Vs get excluded
 
 %%%%% this is where the changed bit starts (wrt standard mtex/smooth)
+if keepEbsdId
 ebsdIdPairs = [grains.boundary.ebsdId; grains.innerBoundary.ebsdId]; % 1 per segment F
 
 % index me using I_VF -- each column is V belonging to 1 F
@@ -90,24 +103,9 @@ VperF= cellfun(@find,mat2cell(I_VF,size(I_VF,1),ones(1,size(I_VF,2))),'UniformOu
 % not moved into the wrong part of the ebsd map and you can allow further
 % smoothing.
 tfIntersect=true(numF,1); % if tfIntsersect(i) == true, then allow V(i) to move
+end
 
 for l=1:iter
-  if ~strcmpi(weight,'rate')
-    [i,j] = find(A_V);
-    d = sqrt(sum((V(i,:)-V(j,:)).^2,2)); % distance
-    switch weight
-      case 'umbrella'
-        w = 1./(d);
-        w(d==0) = 1;
-      case 'gauss'
-        w = exp(-(d./lambda).^2);
-      case {'expotential','exp'}
-        w = lambda*exp(-lambda*d);
-    end
-    
-    A_V = sparse(i,j,w,t,t);
-  end
-
 
     %%%%% from orignal code
     if ~strcmpi(weight,'rate')
@@ -131,17 +129,17 @@ for l=1:iter
 
     m = sum(A_V,2);
 
-
     dV = V(isNotZero,:)-bsxfun(@rdivide,Vt(isNotZero,:),m(isNotZero,:));
 
     isZero = any(~isfinite(dV),2);
     dV(isZero,:) = 0;
     %%%%%%
-
+    if keepEbsdId
     % update V - but save a copy VOld before updating
     VOld=V;
+    end
     V(isNotZero,:) = V(isNotZero,:) - lambda*dV;
-
+    if keepEbsdId
     %find ebsdIdLines on either side of gB segments F
     %look through rows for any bad ebsdId points - 0 or other weird numbers
     badEbsdId = any((~(ebsdIdPairs) | isnan(ebsdIdPairs) |  isinf(ebsdIdPairs)),2);
@@ -172,17 +170,16 @@ for l=1:iter
     % stop moving these vertices in the future
     % update isNotZero
     isNotZero(vDontMove) = false;
-
+    end
 end
-
+if keepEbsdId
 % output grain vertices that stopped moving
 stablefraction = numel(vDontMove)/t;
-
+end
 % update output
 grains.allV = vector3d.byXYZ(V,grains.how2plot);
 
-end
-
+end %function
 
 function tf = testIntersection(line1, line2)
 % test whether or not two sets of finite length line segments intersect
@@ -194,7 +191,7 @@ function tf = testIntersection(line1, line2)
 % Outputs
 % tf = 1*n logical array, true if the nth line1 and line2 intersect, false if they don't (or it's another special
 % case*)
-
+%
 % * if line1==line2 or any of the line lengths are 0
 % (i.e. [startx starty] == [endx endy]), then tf returns
 % false even if they intersect which is ok for us, this
@@ -226,3 +223,4 @@ ccw = @(A,B,C) (C(2,:) - A(2,:)) .* (B(1,:)-A(1,:)) > (B(2,:)-A(2,:)) .* (C(1,:)
 tf = (ccw(aa,cc,dd) ~= ccw(bb,cc,dd)) & (ccw(aa,bb,cc) ~= ccw(aa,bb,dd));
 tf=tf(:);
 end
+
