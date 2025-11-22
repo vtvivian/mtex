@@ -1,4 +1,4 @@
-function [grains,stablefraction] = smooth(grains,iter,ebsd,varargin)
+function [grains,stablefraction] = smooth(grains,iter,varargin)
 % constrained laplacian smoothing of grain boundaries
 % stopping criteria for smoothing iterations based on boundary ebsdId positions
 %
@@ -7,7 +7,8 @@ function [grains,stablefraction] = smooth(grains,iter,ebsd,varargin)
 %
 % Input
 %  grains - @grain2d
-%  iter   - number of iterations (default: 1)
+%  iter   - number of iterations (default: 1 for conventional smooth, 100 
+%           for EBSD constrained smooth)
 %
 % Optional Input
 %  ebsd   - @EBSD - stop moving gb segments about to cross over to the wrong side of
@@ -20,7 +21,7 @@ function [grains,stablefraction] = smooth(grains,iter,ebsd,varargin)
 %
 % Options
 %  moveTriplePoints  - do not exclude triple/quadruple points from smoothing
-%  moveOuterBoundary - do not exclude outer boundary from smoothing 
+%  moveOuterBoundary - do not exclude outer boundary from smoothing
 %  second_order, S2  - second order smoothing
 %  rate              - default smoothing kernel
 %  gauss             - Gaussian smoothing kernel
@@ -31,7 +32,9 @@ function [grains,stablefraction] = smooth(grains,iter,ebsd,varargin)
 [ebsd,varargin] = getClass(varargin,'EBSD');
 if  ~isempty(ebsd)
     keepEbsdId=true;
-
+    % optimise default params
+    if isempty(iter), iter=100; end
+    varargin{end+1} = 'moveTriplePoints';
 else
     keepEbsdId=false;
     stablefraction = [];
@@ -63,19 +66,19 @@ t = size(A_V,1);
 numF = size(I_VF,2);
 % do not consider triple points
 if check_option(varargin,'moveTriplePoints')
-  ignore = false(size(A_V,1),1);
+    ignore = false(size(A_V,1),1);
 else
-  ignore = full(diag(A_V)) > 2;
+    ignore = full(diag(A_V)) > 2;
 end
 
 % ignore outer boundary
 if ~check_option(varargin,'moveOuterBoundary')
-  ignore(grains.boundary.F(any(grains.boundary.grainId==0,2),:)) = true;
+    ignore(grains.boundary.F(any(grains.boundary.grainId==0,2),:)) = true;
 end
 
 if check_option(varargin,{'second order','second_order','S','S2'})
-  A_V = logical(A_V + A_V*A_V);
-  A_V = A_V - diag(diag(A_V));
+    A_V = logical(A_V + A_V*A_V);
+    A_V = A_V - diag(diag(A_V));
 end
 
 weight = get_flag(varargin,{'gauss','expotential','exp','umbrella','rate'},'rate');
@@ -87,22 +90,22 @@ isNotZero = ~all(~isfinite(V) | V == 0,2) & ~ignore; %this is at the start, upda
 
 %%%%% this is where the changed bit starts (wrt standard mtex/smooth)
 if keepEbsdId
-ebsdIdPairs = [grains.boundary.ebsdId; grains.innerBoundary.ebsdId]; % 1 per segment F
+    ebsdIdPairs = [grains.boundary.ebsdId; grains.innerBoundary.ebsdId]; % 1 per segment F
 
-% index me using I_VF -- each column is V belonging to 1 F
-% so for segment f1
-% [v1] = find(I_VF(f1,:));
-%always 2 V per segment F but cellfun doesn't like uniformoutput bc the matrices
-%are shaped wrong, so reshape stuff afterwards
-VperF= cellfun(@find,mat2cell(I_VF,size(I_VF,1),ones(1,size(I_VF,2))),'UniformOutput',false); VperF=permute(cat(2,VperF{:}),[2 1]);
+    % index me using I_VF -- each column is V belonging to 1 F
+    % so for segment f1
+    % [v1] = find(I_VF(f1,:));
+    %always 2 V per segment F but cellfun doesn't like uniformoutput bc the matrices
+    %are shaped wrong, so reshape stuff afterwards
+    VperF= cellfun(@find,mat2cell(I_VF,size(I_VF,1),ones(1,size(I_VF,2))),'UniformOutput',false); VperF=permute(cat(2,VperF{:}),[2 1]);
 
-%initialise line segment intersections - this determines whether or not a gb segment may move or not
-% all segments are allowed to move at the start.
-% If the the gB segment line intersects the line drawn between the ebsd map
-% points either size of the gB (ebsdIdPairs), it means that the boundary has
-% not moved into the wrong part of the ebsd map and you can allow further
-% smoothing.
-tfIntersect=true(numF,1); % if tfIntsersect(i) == true, then allow V(i) to move
+    %initialise line segment intersections - this determines whether or not a gb segment may move or not
+    % all segments are allowed to move at the start.
+    % If the the gB segment line intersects the line drawn between the ebsd map
+    % points either size of the gB (ebsdIdPairs), it means that the boundary has
+    % not moved into the wrong part of the ebsd map and you can allow further
+    % smoothing.
+    tfIntersect=true(numF,1); % if tfIntsersect(i) == true, then allow V(i) to move
 end
 
 for l=1:iter
@@ -135,46 +138,46 @@ for l=1:iter
     dV(isZero,:) = 0;
     %%%%%%
     if keepEbsdId
-    % update V - but save a copy VOld before updating
-    VOld=V;
+        % update V - but save a copy VOld before updating
+        VOld=V;
     end
     V(isNotZero,:) = V(isNotZero,:) - lambda*dV;
     if keepEbsdId
-    %find ebsdIdLines on either side of gB segments F
-    %look through rows for any bad ebsdId points - 0 or other weird numbers
-    badEbsdId = any((~(ebsdIdPairs) | isnan(ebsdIdPairs) |  isinf(ebsdIdPairs)),2);
-    %can't draw line, probably a map edge, exclude me
-    tfIntersect(badEbsdId) = false;
+        %find ebsdIdLines on either side of gB segments F
+        %look through rows for any bad ebsdId points - 0 or other weird numbers
+        badEbsdId = any((~(ebsdIdPairs) | isnan(ebsdIdPairs) |  isinf(ebsdIdPairs)),2);
+        %can't draw line, probably a map edge, exclude me
+        tfIntersect(badEbsdId) = false;
 
-    e1 = ebsd(id2ind(ebsd,ebsdIdPairs(tfIntersect,:))).pos;
-    ebsdIdLine = permute(cat(3,e1.x, e1.y), [2 3 1]);
+        e1 = ebsd(id2ind(ebsd,ebsdIdPairs(tfIntersect,:))).pos;
+        ebsdIdLine = permute(cat(3,e1.x, e1.y), [2 3 1]);
 
-    %2 Vs per F
-    % test ebsdIdPairs against V
-    % see warning just after the iter for-loop
-    vS= cat(3,V(VperF(tfIntersect,1),1),V(VperF(tfIntersect,1),2)); % xy of segment starts
-    vE= cat(3,V(VperF(tfIntersect,2),1),V(VperF(tfIntersect,2),2)); % xy of segment ends
-    vLine = permute(cat(2,vS,vE),[2 3 1]); %handle dims
-    %if these line segments intersect, this point may still move
-    %if they don't intersect, this V shouldn't move anymore
-    % only repopulate 'true' elements of tfFintersect
-    tfIntersect(tfIntersect) = testIntersection(vLine,ebsdIdLine);
+        %2 Vs per F
+        % test ebsdIdPairs against V
+        % see warning just after the iter for-loop
+        vS= cat(3,V(VperF(tfIntersect,1),1),V(VperF(tfIntersect,1),2)); % xy of segment starts
+        vE= cat(3,V(VperF(tfIntersect,2),1),V(VperF(tfIntersect,2),2)); % xy of segment ends
+        vLine = permute(cat(2,vS,vE),[2 3 1]); %handle dims
+        %if these line segments intersect, this point may still move
+        %if they don't intersect, this V shouldn't move anymore
+        % only repopulate 'true' elements of tfFintersect
+        tfIntersect(tfIntersect) = testIntersection(vLine,ebsdIdLine);
 
-    % if the line segments don't intersect,
-    % revert the vertex positions - don't update V
-    % (just now we did VOld=V; before updating V(isNotZero,:) =
-    % V(isNotZero,:) - lambda*dV;)
-    vDontMove= unique(VperF(~tfIntersect)); % V might appear more than once
-    V(vDontMove,:) = VOld(vDontMove,:);
+        % if the line segments don't intersect,
+        % revert the vertex positions - don't update V
+        % (just now we did VOld=V; before updating V(isNotZero,:) =
+        % V(isNotZero,:) - lambda*dV;)
+        vDontMove= unique(VperF(~tfIntersect)); % V might appear more than once
+        V(vDontMove,:) = VOld(vDontMove,:);
 
-    % stop moving these vertices in the future
-    % update isNotZero
-    isNotZero(vDontMove) = false;
+        % stop moving these vertices in the future
+        % update isNotZero
+        isNotZero(vDontMove) = false;
     end
 end
 if keepEbsdId
-% output grain vertices that stopped moving
-stablefraction = numel(vDontMove)/t;
+    % output grain vertices that stopped moving
+    stablefraction = numel(vDontMove)/t;
 end
 % update output
 grains.allV = vector3d.byXYZ(V,grains.how2plot);
