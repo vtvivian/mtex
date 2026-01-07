@@ -283,8 +283,8 @@ catch
                 EBSD.load(fName),...
                         reflection(xvector),'keepEuler'));
             warning(orig_state);
-            out.how2plot = plottingConvention(vector3d.Z,-vector3d.X);
-            
+            out.how2plot.east = -xvector;
+            out.how2plot.outOfScreen = zvector;
           
         case '3d'
           
