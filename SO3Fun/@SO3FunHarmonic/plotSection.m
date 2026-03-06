@@ -32,7 +32,7 @@ if numel(SO3F)>1
   SO3F = SO3F.subSet(1);
 end
 if ~SO3F.isReal
-  warning(['Imaginary part of complex valued SO3FunHarmonic is ignored. ' ...
+  warning(['Imaginary part of complex valued SO3Fun''s is ignored. ' ...
     'In the following only the real part is plotted.'])
   SO3F.isReal=1;
 end

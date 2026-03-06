@@ -1,30 +1,40 @@
 classdef SO3FunMLS < SO3Fun
 % a class representing a function on the rotation group
+% 
 % Syntax
 %   SO3F = SO3FunMLS(nodes,values)
-%   SO3F = SO3FunMLS(nodes,values,N,__)
-%   SO3F = SO3FunMLS(nodes,values,eps,__)
-%   SO3F = SO3FunMLS(nodes,values,eps,w,__)
+%   SO3F = SO3FunMLS(nodes,values, nn, __)
+%   SO3F = SO3FunMLS(nodes,values, delta, __)
+%   SO3F = SO3FunMLS(nodes,values, delta, w, @(t)(__))
+%   SO3F = SO3FunMLS(nodes,values, 'centered', 'detectOutliers', 'subsample', 'tangent')
 %
 % Input
-%  nodes  - @orientation,@rotation (interpolation points)
+%  nodes  - @orientation, @rotation (data points)
 %  values - array of function values
-%  N      - specified number of neighbors used for local interpolation
-%  eps    - support radius of the weight function
-%  w      - @function_handle (weight function)
 %
 % Output
 %  SO3F - @SO3FunMLS
 %
 % Options
-%  degree - the polynomial degree used for approximation
+%  degree  - the polynomial degree used for approximation
+%  delta   - support radius of the weight function
+%  nn      - specified number of neighbors used for local approximation
+%  outlierDetectionRange - specify how many neighbors are taken into account
+%                          when searching for outliers
+%  w       - @function_handle (weight function)
+%          - predefined weight function can be chosen via the following strings:
+%             'C1hat', 'const', 'cos', 'hat', 'indicator', 'squared hat', 
+%             'wendland' (default)
+% distance - specify which metric to use (default: 'euclidean')
+%          - run 'help rangesearch' for available options
 %
 % Flags
-%  centered     - only evaluate the basis near the pole if true
-%  tangent      - use polynomials on the tangent space
-%  hat          - use hat function as weight function
-%  squared_hat  - use squared-hat function as weight function
-%  indicator    - use indicator function as weight function
+%  centered       - only evaluate the basis near the north pole (1,0,0,0) if true
+%  detectOutliers - find outliers in the data and reduce their weight in the local least squares problems 
+%                   depending on how bad they are
+%  subsample      - use a subset of the local nodes that minimizes the Lebesgue
+%                   constant 
+%  tangent        - use polynomials on the tangent space
 %
 
 % TODO: transform into local interpolation-class where SO3FunMLS is a specific subclass
@@ -32,21 +42,34 @@ classdef SO3FunMLS < SO3Fun
   properties
     nodes       = [];   % orientations where the function values are known
     values      = [];   % the corresponding values
+
     degree      = 3     % the polynomial degree used for approximation
     delta       = 0     % support radius of the weight function
     nn          = 0     % specified number of neighbors to use 
-    w           = @(t)(max(1-t, 0).^4 .* (4*t+1));        % wendland weight function
+    w           = @(t)(max(1-t, 0).^4 .* (4*t+1)); % wendland weight function
+
     centered    = false % only evaluate the basis near the pole if true
     tangent     = false % use polynomials on the tangent space
+    subsample   = false % perform optimal subsampling, or not
+
+    detectOutliers = false; % specify if we should search for outliers, and reduce their weight
+    outlierDetectionRange = 10; % number of neighbors to take into account for outlier detection
+
     bandwidth   = getMTEXpref('maxSO3Bandwidth');
   end
 
   properties (Dependent)
-    dim
     antipodal
+    dim
+    isReal
+    outlierIndicators
     SLeft
     SRight
   end
+
+  % TODO: symmetrise w.r.t one symmetry.
+  % TODO: use properGroups
+  % TODO: use SO3Grid structure
 
   methods
     
@@ -62,66 +85,82 @@ classdef SO3FunMLS < SO3Fun
         return
       end
 
-      % TODO: uniqueData
-      
-      if isa(nodes,'rotation'), nodes = orientation(nodes); end
-      SO3F.nodes = nodes; % preserve grid structure
-      sz = [size(values),1];
-      SO3F.values = reshape(values(:) , [length(nodes) , sz(find(cumprod(sz)==length(nodes), 1)+1:end)] );
+      nodes = orientation(nodes);
 
-      % set optional arguments
-      SO3F.degree = get_option(varargin,'degree',3);
-      
-      % apply flags in the function arguments and remove them afterwards
-      SO3F.centered = check_option(varargin,'centered');
-      if check_option(varargin,'tangent')
-        SO3F.tangent = true;
-        SO3F.centered = true;
+      nodes = squeeze(nodes);
+      values = squeeze(values);
+
+      % MLS needs unique nodes
+      if (numel(unique(nodes, 'stable')) < numel(nodes))
+        nodes = nodes(:);
+        values = reshape(values, numel(nodes), []);
+        [nodes, values] = uniqueData(nodes, values, 'median');
       end
 
-      % get the weight function if one is specified
-      fun = getClass(varargin,'function_handle');
-      if ~isempty(fun)
-        SO3F.w = fun;
-      elseif check_option(varargin,'hat')
-        SO3F.w = @(t)(max(1-t, 0));
-      elseif check_option(varargin,'squared hat')
-        SO3F.w = @(t)(max(1-t, 0).^2);
-      elseif check_option(varargin,'indicator')
-        SO3F.w = @(t)(t .* (t < 1));
-      end
-
-      % set delta or k if given
-      if nargin > 2 && isnumeric(varargin{1})
-        temp = varargin{1};
+      % adapt the sizes of nodes and values to each other
+      values_size = size(values);
+      id = find(cumprod(size(values)) == numel(nodes), 1, 'first');
+      if (id < numel(values_size))
+        remaining_sizes = values_size(id+1 : end);
+        values = reshape(values, [size(nodes), remaining_sizes]);
       else
-        temp = 2 * SO3F.dim;
+        values = reshape(values, size(nodes));
       end
-      % if the input is a whole number, assume that nn is specified
-      if (floor(temp) == temp)
-        if (temp < SO3F.dim)
-          warning('The specified number of neighbors nn was less than the dimension dim. nn has been set to 2 * dim.');
-          SO3F.nn = 2*SO3F.dim;
-        else 
-          SO3F.nn = temp;
-        end
-        SO3F.delta = guess_delta(SO3F);
-      else
+
+      % remove dimensions of size 1
+      nodes = squeeze(nodes);
+      % if nodes is 2D and the first dim is 1, transpose it 
+      if (size(nodes, 1) == 1), nodes = transpose(nodes); end
+      % assign
+      SO3F.nodes = nodes;
+
+      % same as for nodes
+      values = squeeze(values);
+      if (size(values, 1) == 1), values = values.'; end
+      SO3F.values = squeeze(values);
+
+      % set degree, number of neighbors, support radius delta,
+      %   outlierDetectionRange, weight function
+      SO3F.degree = get_option(varargin, 'degree', 3, 'double');
+      SO3F.nn = round(get_option(varargin, {'neighbors', 'nn'}, 2*SO3F.dim, 'double'));
+      if (SO3F.nn < SO3F.dim)
         SO3F.nn = 2 * SO3F.dim;
-        SO3F.delta = temp;
+        warning(sprintf(...
+          ['The specified number of neighbors was less than the dimension ' ...
+          'of the ansatz space.\n\t It has been set to 2 times the dimension.']));
       end
-      
+      SO3F.delta = get_option(varargin, {'delta', 'range', 'support radius'}, compute_delta(SO3F), 'double');
+      SO3F.outlierDetectionRange = round(get_option(varargin, ...
+        {'outlierdetectionrange', 'outlier detection range', 'odr'}, 10, 'double'));
+
+      % set the weight function 
+      weightfun = get_option(varargin, 'weight', 'wendland', {'string','function_handle'});
+      if (isa(weightfun, 'function_handle'))
+        SO3F.w = weightfun;
+      else
+        switch weightfun
+          case 'hat';         SO3F.w = @(t)(max(1-t, 0));
+          case 'squared hat'; SO3F.w = @(t)(max(1-t, 0).^2);
+          case 'indicator';   SO3F.w = @(t)(t .* (t <= 1));
+          case 'const';       SO3F.w = @(t)(t .* (t <= 1));
+          case 'cos';         SO3F.w = @(t)((1+cos(pi*t))/2);
+          case 'C1hat';       SO3F.w = @(t)((1-t.^2).^2);
+          case 'wendland';    SO3F.w = @(t)(max(1-t, 0).^4 .* (4*t+1));
+          otherwise;          SO3F.w = @(t)(max(1-t, 0).^4 .* (4*t+1));
+        end
+      end
+
+      % apply boolean flag arguments
+      SO3F.centered = check_option(varargin, 'centered');
+      SO3F.tangent = check_option(varargin, 'tangent');
+      SO3F.subsample = check_option(varargin, {'subsampling', 'subsample'});
+      SO3F.detectOutliers = check_option(varargin, ...
+        {'detect outliers', 'detectoutliers, detect_outliers'});
+
     end
 
-    function dimension = get.dim(SO3F)
-      if (SO3F.degree == 0)
-        dimension = 1;
-        return;
-      end
-      dimension = nchoosek(SO3F.degree + 3, 3);
-    end
-
-    function d = guess_delta(SO3F)
+    % choose delta such that we get can expect factor-2-oversampling for uiid points
+    function d = compute_delta(SO3F)
       % for N nodes on one hemisphere, the expected number of nodes in a
       % spherical cap of angular radius phi is
       %         N * 2/pi * (phi - sin(phi) * cos(phi))
@@ -132,6 +171,14 @@ classdef SO3FunMLS < SO3Fun
       d = 2 * d;
     end
 
+    function dimension = get.dim(SO3F)
+      if (SO3F.degree == 0)
+        dimension = 1;
+        return;
+      end
+      dimension = nchoosek(SO3F.degree + 3, 3);
+    end
+
     % if only delta is specified, guess nn for this delta
     function nn = guess_nn(SO3F, varargin)
       testnodes = equispacedSO3Grid(SO3F.nodes.CS, 'points', 1000);
@@ -140,13 +187,22 @@ classdef SO3FunMLS < SO3Fun
         nn = ceil(mean(sum(ind, 2)));
         return;
       end
-
       if (varargin{1} == "min")
         nn = floor(min(sum(ind, 2)));
       elseif (varargin{1} == "max")
         nn = ceil(max(sum(ind, 2)));
       end
     end
+
+    % return number of neighbors for given v (use for identifying 'bad regions')
+    function nns = count_neighbors(SO3F, ori)
+      if (SO3F.delta == 0)
+        SO3F.delta = SO3F.compute_delta();
+      end
+      ind = SO3F.nodes.find(ori, SO3F.delta);
+      nns = sum(ind, 2);
+    end
+
 
     function SO3F = set.SRight(SO3F,S)
       SO3F.nodes.CS = S;
@@ -172,7 +228,7 @@ classdef SO3FunMLS < SO3Fun
       end
     end
 
-    function SO3F = set.antipodal(SO3F,antipodal)
+    function SO3F = set.antipodal(SO3F, antipodal)
       SO3F.nodes.antipodal = antipodal;
     end
 
@@ -184,8 +240,39 @@ classdef SO3FunMLS < SO3Fun
       end
     end
 
+    function SO3F = set.detectOutliers(SO3F, value)
+      SO3F.detectOutliers = value;
+      if (value)
+        % set standard value of outlier detection range
+        % should be at least 4, since this is the dim of the basis which is used
+        % for computing the outlier indicators
+        SO3F.outlierDetectionRange = max(round(SO3F.dim * .7), 4);
+      end
+    end
+
+    function out = get.isReal(f)
+      out = isreal(f.values);
+    end
+  
+    function F = set.isReal(F,value)
+      if ~value, return; end
+      F.values = real(F.values);
+    end
+
+    % tangent need centered
+    function SO3F = set.tangent(SO3F, value)
+      SO3F.tangent = value;
+      if (value == true)
+        SO3F.centered = true;
+      end
+    end
+
     function n = numArgumentsFromSubscript(varargin)
       n = 0;
+    end
+
+    function oI = get.outlierIndicators(SO3F)
+      oI = computeOutlierIndicators(SO3F);
     end
 
   end

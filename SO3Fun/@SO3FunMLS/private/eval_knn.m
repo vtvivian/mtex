@@ -1,4 +1,4 @@
-function [vals, conds] = eval_knn(SO3F, ori)
+function [vals, conds] = eval_knn(SO3F, ori, varargin)
 
 if (SO3F.nn < SO3F.dim)
   SO3F.nn = 2 * SO3F.dim;
@@ -7,26 +7,52 @@ if (SO3F.nn < SO3F.dim)
     'nn has been set to 2 * dim.']));
 end
 
-dimensions = size(ori);
 ori = ori(:);
 N = numel(ori);
 nn = SO3F.nn;
 nn_total = nn * N;
  
 % find the neighbors, construct index vectors
-[ind, dist] = SO3F.nodes.find(ori, nn); 
+[ind, dist] = SO3F.nodes.find(ori, nn);
+
+if (SO3F.subsample == true)
+  ind = SO3F.find_optimal_subset(ind, ori, varargin{:});
+  nn_total = N * SO3F.dim;
+  nn = SO3F.dim;
+end
+
 % grid_id = id of the neighbors (in the grid of SO3F)
 grid_id = reshape(ind', nn_total, 1);
 clear ind;
-% v_id = id of entry of v (where we want to eval SO3F)
+% ori_id = id of entry of ori (where we want to eval SO3F)
 ori_id = reshape(repmat((1:N), nn, 1), nn_total, 1);
 
+if (SO3F.subsample == true)
+  dist = angle(ori.subSet(ori_id), SO3F.nodes.subSet(grid_id));
+  dist = reshape(dist, SO3F.dim, N)';
+end
+
 % compute the weights, set delta slighlty larger than the farthest neighbor 
-W_book = SO3F.w(dist ./ (1.1 * max(dist, [], 2)));
+% take the root of the weights, see after large if-block for explanation
+weights = SO3F.w(dist ./ (1.1 * max(dist, [], 2)))';
 clear dist;
-W_book = reshape(W_book', 1, nn, N);
-% also get the needed values of SO3F on its grid
-f_book = reshape(SO3F.values(grid_id,:), nn, N, numel(SO3F));
+
+% set up the right hand side
+grid_vals = reshape(SO3F.values(:), numel(SO3F.nodes), numel(SO3F));
+f_book = reshape(grid_vals(grid_id,:), nn, N, numel(SO3F));
+if (SO3F.detectOutliers == true)
+  oI = computeOutlierIndicators(SO3F); 
+  oI = reshape(oI(grid_id), nn, N);
+  weights = weights .* exp(-oI);
+  clear oI grid_vals;
+end
+
+% normalize the maximum weight to 1
+% reason for the root is explained after the end of the following large if-block
+weights = sqrt(weights ./ max(weights, [], 1));
+fw_book = weights .* f_book;
+fw_book = permute(fw_book, [1, 3, 2]);
+clear f_book;
 
 % Compute G_book. Each page contains the values of the basis at all neighbors. 
 % if CS is trivial and SO3F.centered is disabled, we can speed up things
@@ -48,7 +74,7 @@ elseif (~SO3F.centered)
   % evaluate for every ori all basis functions at all neighbors ...
   % NOTE: projecting to fR is very important, since later we treat all oris as 
   %       points on the sphere S^3 and use monomials
-  projected = project2FundamentalRegion(SO3F.nodes(grid_id), ori(ori_id)); 
+  projected = project2FundamentalRegion(SO3F.nodes(grid_id), ori(ori_id));  % In case of 2 symmetries, we have to symmetrise here w.r.t. lower symmetry (done in eval routine) 
   G = eval_basis_functions(SO3F, projected)'; 
   clear projected;
   % ... and also in the oris themselves
@@ -58,7 +84,7 @@ else
   % this enhances the condition of the gram matrices dramatically
   inv_oris = inv(ori);
   inv_oris = reshape(inv_oris(ori_id), size(SO3F.nodes(grid_id)));
-  projected = project2FundamentalRegion(SO3F.nodes(grid_id), ori(ori_id));
+  projected = project2FundamentalRegion(SO3F.nodes(grid_id), ori(ori_id));  % In case of 2 symmetries, we have to symmetrise here w.r.t. lower symmetry (done in eval routine) 
   rotneighbors = inv_oris .* projected;
   clear inv_oris projected ori_id;
 
@@ -72,36 +98,37 @@ end
 G_book = reshape(G, SO3F.dim, nn, N);
 clear G grid_id;
 
-% compute rescaling parameters for bether condition of the gram matrix
-s = sqrt(sum(G_book.^2 .* W_book, 2));
+% don't solve the normal equations G'WGc = G'Wf (like cond(G)^2)
+% rather let matlab directly find min norm solution of sqrt(W) * (Gc-f)
+% internally this uses QR and we end up with only cond(G), without the square!
 
-% start computing the (rescaled) Gram matrix
-W_times_G_book = pagetranspose(G_book .* W_book ./ s);
-clear W_book;
-Gram_book = pagemtimes(G_book, W_times_G_book) ./ s;
+% B satisfies B' * B = G' * W * G
+B_book = G_book .* reshape(weights, [1, size(weights)]);
+clear G_book weights;
 
-% compute the generating functions
-genfuns_book = pagemtimes(W_times_G_book, pagemldivide(Gram_book, g_book ./ s));
-genfuns_book = permute(genfuns_book,[1,3,2]);
-clear W_times_G_book g_book s;
+% compute scaling factors for preconditioning the grams systems
+s_book = sqrt(sum(abs(B_book).^2, 2));
 
-% assemble the right hand side of the Gram system
-vals = sum(f_book .* genfuns_book, 1);
-if isscalar(SO3F)
-  vals = reshape(vals, dimensions);
-else
-  vals = reshape(vals, [numel(ori) size(SO3F)]);
-end
+% solve the rescaled systems and evaluate MLS
+c_book = pagemldivide(pagetranspose(B_book ./ s_book), fw_book) ./ s_book;
+
+
+
+clear fw_book;
+vals = sum(c_book .* g_book, 1);
+clear c_book g_book;
+
+% set correct output format
+vals = permute(vals, [3, 2, 1]);
 
 if isalmostreal(SO3F.values)
   vals = real(vals);
 end
 
 if nargout == 2
-  eigs = pagesvd(Gram_book);
+  eigs = pagesvd(B_book ./ s_book);
   conds = eigs(1,:,:) ./ eigs(SO3F.dim,:,:);
   conds = conds(:);
-  conds = reshape(conds, dimensions);
 end
 
 end
