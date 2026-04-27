@@ -24,14 +24,9 @@ function plot(SO3F,varargin)
 % See also
 % SO3Fun/plotSection SO3Fun/plot3d SO3Fun/plotFibre
 
-if numel(SO3F)>1
-  warning(['You try to plot an multivariate function. Plot the desired components ' ...
+if numel(SO3F)>1 && ~getMTEXpref('generatingHelpMode')
+  warning(['You try to plot a vector valued function. Plot the desired components ' ...
     'manually. In the following the first component is plotted.'])
-end
-if ~SO3F.isReal
-  warning(['Imaginary part of complex valued SO3FunHarmonic is ignored. ' ...
-    'In the following only the real part is plotted.'])
-  SO3F.isReal=1;
 end
 
 plot@SO3Fun(SO3F.subSet(1),varargin{:});

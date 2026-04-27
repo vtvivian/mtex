@@ -145,7 +145,10 @@ classdef plottingConvention < matlab.mixin.Copyable
     end
 
 
-    function v = get.outOfScreen(pC), v = pC.rot * vector3d.Z; end
+    function v = get.outOfScreen(pC)
+      v = pC.rot * vector3d.Z; 
+      v.how2plot = pC;
+    end
     function set.outOfScreen(pC,n)
       try
         pC.rot = rotation.map(pC.outOfScreen,n,pC.lastSet,pC.lastSet) * pC.rot;
@@ -155,7 +158,10 @@ classdef plottingConvention < matlab.mixin.Copyable
       pC.lastSet = n;
     end
 
-    function v = get.intoScreen(pC), v = -pC.rot * vector3d.Z; end
+    function v = get.intoScreen(pC)
+      v = -pC.rot * vector3d.Z;
+      v.how2plot = pC;
+    end
     function set.intoScreen(pC,n)
       try
         pC.rot = rotation.map(pC.outOfScreen,-n,pC.lastSet,pC.lastSet) * pC.rot;
@@ -166,7 +172,10 @@ classdef plottingConvention < matlab.mixin.Copyable
     end
 
 
-    function v = get.east(pC), v = pC.rot * vector3d.X; end
+    function v = get.east(pC) 
+      v = pC.rot * vector3d.X;
+      v.how2plot = pC;
+    end
     function set.east(pC,e)
       try
         pC.rot = rotation.map(pC.east,e,pC.lastSet,pC.lastSet) * pC.rot; 
@@ -176,7 +185,10 @@ classdef plottingConvention < matlab.mixin.Copyable
       pC.lastSet = e;
     end
 
-    function v = get.west(pC), v = -pC.rot * vector3d.X; end
+    function v = get.west(pC)
+      v = -pC.rot * vector3d.X; 
+      v.how2plot = pC;
+    end
     function set.west(pC,w)
       try
         pC.rot = rotation.map(pC.east,-w,pC.lastSet,pC.lastSet) * pC.rot; 
@@ -186,7 +198,10 @@ classdef plottingConvention < matlab.mixin.Copyable
       pC.lastSet = w;
     end
 
-    function v = get.north(pC), v = pC.rot * vector3d.Y; end
+    function v = get.north(pC)
+      v = pC.rot * vector3d.Y; 
+      v.how2plot = pC;
+    end
     function set.north(pC,v)
       try
         pC.rot = rotation.map(pC.north,v,pC.lastSet,pC.lastSet) * pC.rot; 
@@ -268,27 +283,18 @@ classdef plottingConvention < matlab.mixin.Copyable
     function pC = default3D
       pC = plottingConvention(vector3d(-10,-5,2),vector3d(1,-2,0));
     end
-
-    function pC = image
+   
+   function pC = ij
         % Map plotting conventions to match SEM image display and MATLAB 
-        % 'axis image' reference frames.
+        % 'axis ij' reference frames.
         % Use with import flag "convertEuler2SpatialReferenceFrame" for
         % most modern SEM systems.
         % Useful for producing comparable map plots in MTEX, 
         % MATLAB and SEM/EBSD software.
+        %
+        % pC = plottingConvention.ij;
+        %
         pC = plottingConvention(-vector3d.Z,vector3d.X);
-    end
-    
-    function pC = oxInst
-        % Map plotting conventions to match OxInst Euler reference frame
-        % X1/Y1/Z1 on most SEM systems.
-        % Use with import flag "convertSpatial2EulerReferenceFrame" on
-        % Oxford Instruments systems.
-        % Useful for producing comparable orientation plots in MTEX and Oxford
-        % Instruments software.
-      pC = plottingConvention(vector3d.Z,-vector3d.X);
-      warning("Using typical reference frames for Oxford Instruments EBSD on most modern SEMs." + ...
-          "You should verify this for your particular system (see AZtec EBSD Data Analysis User Guide, page 6).")
     end
 
     function pC = edax(setting)
@@ -320,17 +326,6 @@ classdef plottingConvention < matlab.mixin.Copyable
                 east = -vector3d.X;
         end
         pC = plottingConvention(outOfScreen,east);
-    end
-
-    function pC = bruker
-        % Map plotting conventions to match Bruker Euler reference frame
-        % on most SEM systems.
-        % Use with import flag "convertSpatial2EulerReferenceFrame" on
-        % Bruker systems.
-        % Useful for producing comparable orientation plots in MTEX and Oxford
-        % Instruments software.
-        error("Method not implemented yet. " + ...
-            "Bruker plotting convention is unknown!")
     end
 
   end

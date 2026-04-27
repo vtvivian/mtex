@@ -10,12 +10,12 @@ function varargout = plot(v,varargin)
 %   plot(v,'contour')
 %
 % Input
-%   v - @vector3d
-%   value - values to be displayed
-%   rgb - [r g b] list of colors
+%  v - @vector3d
+%  value - values to be displayed
+%  rgb - [r g b] list of colors
 %
 % Options
-%  Marker           - 'square', 'triangle', 'o','diamond' 
+%  Marker           - e.g. 'square', 'triangle', 'o','diamond' ,'x', 'p',..
 %  MarkerSize       -
 %  MarkerFaceColor  -
 %  MarkerEdgeColor  -

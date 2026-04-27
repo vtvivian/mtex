@@ -7,13 +7,13 @@ function [ind,d] = find(v,w,epsilon_or_k,varargin)
 %   ind = find(v,w,k)       % find k nearest points out of v to w
 %
 % Input
-%  v, w         - @vector3d
+%  v, w         - @orientation
 %  epsilon_or_k - epsilon or k (see below), depending on what the user wants
 %  epsilon      - double
 %  k            - int32
 %
 % Options
-%  antipodal    - include <VectorsAxes.html antipodal symmetry>
+%  antipodal    - include
 %
 % Output
 %  ind          - int32 array for k nearest neighbors,
@@ -24,13 +24,41 @@ function [ind,d] = find(v,w,epsilon_or_k,varargin)
 
 if nargin==2, epsilon_or_k=1; end
 
+if ~isa(w,'orientation')
+  w = orientation(w);
+end
+
 % TODO: This does not work in case of 2 symmetries, where the space has corners.
 %       Implement 2nd version the find method.
 %       --> symmetries w and search again for the symmetric values of
 %       w(ind), where ind = angle(w,fR) < min(d,2)
 
-if v.CS.numSym>1 && v.SS.numSym>1
-  error('The orientation.find method does not work if there is a left AND a right symmetry.')
+v.CS = v.CS.properGroup;
+v.SS = v.SS.properGroup;
+w.CS = w.CS.properGroup;
+w.SS = w.SS.properGroup;
+
+
+cs = v.CS; ss = v.SS;
+% Symmetrise w.r.t. lower symmetry, since only one symmetry can be used in find-method
+if cs.numSym>1 && ss.numSym>1
+  if length(cs.rot) >= length(ss.rot)
+    v = ss*v;
+    v.SS = specimenSymmetry.default;
+    w.SS = specimenSymmetry.default;
+    [ind,d] = find(v,w,epsilon_or_k,varargin{:});
+    % re-indexing
+    ind = ceil(ind/numSym(ss));
+  else
+    % symmetrise SRight
+    v = v*cs;
+    v.CS = specimenSymmetry.default;
+    w.CS = specimenSymmetry.default;
+    [ind,d] = find(v,w,epsilon_or_k,varargin{:});
+    % re-indexing
+    ind = mod(ind-1,numSym(cs))+1;
+  end  
+  return
 end
 
 % Check for matching symmetries
@@ -81,14 +109,14 @@ if (floor(epsilon_or_k) == epsilon_or_k)
   % determine not correctly classified points and search again for them
   nCC = max(d,[],2) > min(pi-angle(wq,fR.N) + epsilon,[],2);
   if sum(nCC)>0
-    if nCC<100
-      d2 = angle(v,wq(nCC)).';
+    if sum(nCC)<100
+      d2 = angle(v(:),wq(nCC).').';
       [d2,ind2] = mink(d2,epsilon_or_k,2);
     else
       [ind2,d2] = find(v,w.subSet(nCC),epsilon_or_k,'worstCaseError');
     end
-    ind(nCC) = ind2;
-    d(nCC) = d2;
+    ind(nCC,:) = id(ind2);
+    d(nCC,:) = d2;
   end
 
 else

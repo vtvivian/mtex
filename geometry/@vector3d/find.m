@@ -5,6 +5,9 @@ function [ind,d] = find(v,w,epsilon_or_k,varargin)
 %   [ind,d] = find(v,w)         % find closest point out of v to w
 %   [I,d]   = find(v,w,epsilon) % find all points out of v in an epsilon neighborhood of w
 %   [ind,d] = find(v,w,k)       % find k nearest points out of v to w
+
+% also specify the KDTreeSearcher of the nodes, so it does not have to be created
+%   [ind,d] = find(v, w, k, 'searcher', kdTreeSearcher) 
 %
 % Input
 %  v, w      - @vector3d
@@ -21,8 +24,13 @@ function [ind,d] = find(v,w,epsilon_or_k,varargin)
 
 % storing the option in v lets @vector3d.angle take care of computing the
 % distance the right way
+
+v = reshape(v, [], 1);
+w = reshape(w, [], 1);
+
 v.antipodal = v.antipodal | check_option(varargin,'antipodal');
 
+distance = get_option(varargin, 'distance', 'euclidean', 'char');
 
 % if v or w is antipodal, we also search for neighbors on the opposite side
 % of the sphere later, we will have to 'project' the indices back down to
@@ -39,7 +47,14 @@ end
 
 % k given ==> find k nearest neighbors
 if (floor(epsilon_or_k) == epsilon_or_k)
-  ind = knnsearch(v.xyz, w.xyz, 'K', epsilon_or_k);
+  % check if there is already a KDTreeSearcher underlying v
+  % this is especially for MLS, where the object might be created multiple times
+  if check_option(varargin, 'searcher', 'KDTreeSearcher')
+    searcher = get_option(varargin, 'searcher');
+    ind = knnsearch(searcher, w.xyz, 'K', epsilon_or_k, 'distance', distance);
+  else
+    ind = knnsearch(v.xyz, w.xyz, 'K', epsilon_or_k, 'distance', distance);
+  end
   if (nargout == 2)
     d = angle(v.subSet(ind), w);
   end
@@ -52,19 +67,31 @@ end
 % epsilon given ==> perform range-search with radius epsilon
 
 % scale spherical region to euclidean region before starting rangesearch
-ind = rangesearch(v.xyz, w.xyz, sqrt(2) * sqrt(1 - cos(epsilon_or_k)));
+% as for knn-search, check if there is already a kdtreesearcher object for v
+if check_option(varargin, 'searcher', 'KDTreeSearcher')
+  searcher = get_option(varargin, 'searcher');
+  ind = rangesearch(searcher, w.xyz, sqrt(2) * sqrt(1 - cos(epsilon_or_k)));
+else
+  ind = rangesearch(v.xyz, w.xyz, sqrt(2) * sqrt(1 - cos(epsilon_or_k)));
+end
 % first convert ind into sparse logical matrix of size numel(w) x numel(v)
 lens = cellfun(@numel, ind);
 row_idx = repelem((1:numel(w)), lens);
 col_idx = cell2mat(ind');
 
+% if w has only 1 vector, then the index vectors are rows, which would cause
+%   angle to return a matrix with all cross-distances
+if (isscalar(w)), row_idx = row_idx(:); col_idx = col_idx(:); end 
+
 % if v or w was antipodal, we 'doubled' the grid to [v;-v] and must now
-% 'project' the indices down to the original grid v
+%   'project' the indices down to the original grid v
 col_idx = mod(col_idx-1, orig_size) + 1;
 ind = sparse(row_idx, col_idx, true(sum(lens),1), numel(w), orig_size);
 
 if (nargout == 2)
+  % if "d = angle(...)" yields wrong results, use the following
+  % d = real(acos(dot(v.subSet(col_idx), w.subSet(row_idx))));
+
   d = angle(v.subSet(col_idx), w.subSet(row_idx));
-  % also convert d to sparse after computing it
   d = sparse(row_idx, col_idx, d, numel(w), numel(v));
 end
